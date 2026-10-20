@@ -6,119 +6,68 @@ import numpy as np
 
 import json
 
+DATA_STR = "roneneldan/TinyStories"
+TRAIN_SPLIT = "train[:1%]"
+VAL_SPLIT = "validation"
+
+ADD_PREFIX_SPACE = False
+VOCAB_SIZE = 4096
+EOT_TOKENS = "<|endoftext|>"
+
+TOKENIZER_PATH = "data/tokenizer.json"
+
+DATA_BIN_PATH = "data/train.bin"
+VAL_BIN_PATH = "data/val.bin"
 
 def load_data(file_name: str, split_type: str) -> Dataset:
 
     data = load_dataset(file_name, split=split_type)
 
-    length = len(data)
+    return data
 
-    return {data, length}
+def train_tokenizer(ds: Dataset, vocab_size: int, special_tokens: str):
 
-train_dataset = load_dataset("roneneldan/TinyStories", split="train[:1%]")
-valid_dataset = load_dataset("roneneldan/TinyStories", split="validation")
+    # BPE = byte-pair encoding, builds vocab from single bytes and merging most common together
+    tok = Tokenizer(models.BPE()) 
 
-print("Length of train dataset: ", len(train_dataset))
-print('-' * 50)
-print("Length of validation dataset: ", len(valid_dataset))
+    # splits text into word chunks, attaches the leading space to each word, and maps text to bytes
+    tok.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=ADD_PREFIX_SPACE) # no space added to starting work - makes model think word is in middle of a sentence
 
-print("Example story: ")
-print('-' * 50)
-print(train_dataset[0]["text"])
+    # decodes from bytes into readable text
+    tok.decoder = decoders.ByteLevel()
 
-# BPE = byte-pair encoding, builds vocab from single bytes and merging most common together
-tok = Tokenizer(models.BPE()) 
+    # train BPE tokenizer upto a vocab size of 4096
+    trainer = trainers.BpeTrainer(
+        vocab_size=vocab_size,
+        special_tokens=[special_tokens], # include end of text special token
+        initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+        )
 
-# splits text into word chunks, attaches the leading space to each word, and maps text to bytes
-tok.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False) # no space added to starting work - makes model think word is in middle of a sentence
+    # train on every row in training dataset
+    tok.train_from_iterator((row["text"] for row in ds), trainer=trainer)
 
-# decodes from bytes into readable text
-tok.decoder = decoders.ByteLevel()
+    # save vocab to a json
+    tok.save(VOCAB_JSON)
 
-# train BPE tokenizer upto a vocab size of 4096
-trainer = trainers.BpeTrainer(
-    vocab_size=4096,
-    special_tokens=["<|endoftext|>"], # include end of text special token
-    initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
-)
+    eot = tok.token_to_id(special_tokens)
 
-# train on every row in training dataset
-tok.train_from_iterator((row["text"] for row in train_dataset), trainer=trainer)
+    return tok, eot
 
-# save vocab to a json
-tok.save("data/tokenizer.json")
-
-print("Vocab size: ", tok.get_vocab_size())
-print('-' * 50)
-
-eot = tok.token_to_id("<|endoftext|>")
-print("End of text token ID: ", eot)
-print('-' * 50)
-
-# encoding test
-encode_test = tok.encode("Once upon a time, the cat went for dinner.")
-
-print("Encoded sentence tokens: ", encode_test.tokens)
-print('-' * 50)
-print("Encoded sentence token IDs: ", encode_test.ids)
-print('-' * 50)
-print("Sentence decoded from token IDs: ", tok.decode(encode_test.ids))
-print('-' * 50)
-
-def encode_split(ds):
-    '''
-    Takens in the dataset and encodes all the text into tokens.
-
-    Arguments: 
-        ds A dataset of text.
-    Returns:
-        np.array(ids, dtype=np.uint16) A numpy array of token IDs
-    '''
+def encode_split(tokenizer: Tokenizer, eot: int, ds: Dataset) -> np.ndarray:
     ids = []
-    for enc in tok.encode_batch([row["text"] for row in ds]):
+    for enc in tokenizer.encode_batch([row["text"] for row in ds]):
         ids.extend(enc.ids)
         ids.append(eot)
     return np.array(ids, dtype=np.uint16)
 
-print("Encoding all training and validation datasets: ")
-train_ids = encode_split(train_dataset); train_ids.tofile("data/train.bin")
-val_ids   = encode_split(valid_dataset);   val_ids.tofile("data/val.bin")
-print('-' * 50)
-print("Finished encoding.")
-print('-' * 50)
+def write_bins(ids: np.ndarray, path: str):
 
-print("Number of train tokens: ", len(train_ids))
-print('-' * 50)
-print("Number of validation tokens: ", len(val_ids))
-print('-' * 50)
+    return ids.tofile(path)
 
-print("Max token ID: ", train_ids.max())
-print('-' * 50)
-print("Number of end-of-text tokens: ", (train_ids == eot).sum())
-print('-' * 50)
 
-total_chars = sum(len(row["text"]) for row in train_dataset)
-total_tokens = len(train_ids) - (len(train_dataset))  # remove the end-of-text tokens
-chars_per_token = total_chars / total_tokens
-print(f"Chars per token: {chars_per_token:.2f}")
-print('-' * 50)
+def write_meta(path: str):
 
-# load the memory map
-train_data = np.memmap("data/train.bin", dtype=np.uint16, mode="r")
-
-# generate a random slice of the data
-i = np.random.randint(0, len(train_data) - 200)
-
-# select this random slice
-chunk = train_data[i : i + 200]
-print("Random decoded slice: ")
-print('-' * 50)
-# decode the random slice
-print(tok.decode(chunk.tolist()))
-
-# meta json of facts about dataset
-
-meta = {
+    meta = {
     "dataset": "roneneldan/TinyStories",
     "train_fraction": "1%",
     "no_train_stories": len(train_dataset),
@@ -129,7 +78,8 @@ meta = {
     "train_tokens": len(train_ids),
     "val_tokens": len(val_ids),
     "chars_per_token": chars_per_token
-}
+    }
 
-with open("data/meta.json", "w") as f:
-    json.dump(meta, f, indent=2)
+    with open("data/meta.json", "w") as f:
+        json.dump(meta, f, indent=2)
+
