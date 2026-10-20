@@ -1,0 +1,12 @@
+{
+  "dataset": "roneneldan/TinyStories",
+  "train_fraction": "1%",
+  "no_train_stories": 21197,
+  "no_val_stories": 21990,
+  "vocab_size": 4096,
+  "end_of_text_token_id": 0,
+  "dtype": "uint16",
+  "train_tokens": 4842240,
+  "val_tokens": 4888012,
+  "chars_per_token": 3.9312296115176735
+}
