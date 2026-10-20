@@ -1,10 +1,19 @@
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 
 from tokenizers import Tokenizer, models, trainers, pre_tokenizers, decoders
 
 import numpy as np
 
 import json
+
+
+def load_data(file_name: str, split_type: str) -> Dataset:
+
+    data = load_dataset(file_name, split=split_type)
+
+    length = len(data)
+
+    return {data, length}
 
 train_dataset = load_dataset("roneneldan/TinyStories", split="train[:1%]")
 valid_dataset = load_dataset("roneneldan/TinyStories", split="validation")
