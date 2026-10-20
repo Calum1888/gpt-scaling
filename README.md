@@ -1,0 +1,1 @@
+# Experiemnt to Explore and Compare GPT Scaling and Pre-Training
