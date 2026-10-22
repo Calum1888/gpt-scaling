@@ -119,7 +119,7 @@ def get_device() -> str:
 
 def get_autocast(device: str):
     """bf16 mixed precision on GPUs that support it, plain fp32 otherwise."""
-    if device == "cuda" and torch.cuda.is_bf16_supported():
+    if device == "cuda" and torch.cuda.is_bf16_supported(including_emulation=False):
         return torch.autocast(device_type="cuda", dtype=torch.bfloat16)
     return nullcontext()
 
