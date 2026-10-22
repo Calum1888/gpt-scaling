@@ -60,13 +60,33 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_data(name: str, split: str) -> Dataset:
-    """Load one split of a Hugging Face dataset."""
+    """
+    Load one split of a Hugging Face dataset.
+    
+    Arguments:
+        name (str) The dataset name.
+        split (str) The type and percentage of split (e.g. 'train', 'validation', '50%')
+    Returns:
+        Loaded dataset.
+    """
     return load_dataset(name, split=split)
 
 
 def train_tokenizer(ds: Dataset, vocab_size: int, eot_token: str,
                     add_prefix_space: bool, save_path: Path) -> tuple[Tokenizer, int]:
-    """Train a byte-level BPE tokeniser on ds, save it, and return it with the EOT ID."""
+    """
+    Train a byte-level BPE tokeniser on dataset, save it, and return it with the end-of-text (EOT) ID.
+
+    Argumets:
+        ds (Dataset) The dataset we want to tokenize.
+        vocab_size (int) The size of the vocabulary to build.
+        eot_token (str) The EOT token.
+        add_prefix_space (bool) True/False to add a space before the first word.
+        save_path (str) The file path to save the vocab.
+    Returns
+        tok (Tokenizer) The trained tokenizer model.
+        eot (int) The EOT token ID. 
+    """
     # BPE = byte-pair encoding: start from single bytes, repeatedly merge the most common pair
     tok = Tokenizer(models.BPE())
 
